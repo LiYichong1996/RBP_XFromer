@@ -1,0 +1,35 @@
+{
+  "architectures": [
+    "Enformer"
+  ],
+  "attn_dim_key": 64,
+  "attn_dropout": 0.05,
+  "depth": 11,
+  "dim": 1536,
+  "dim_divisible_by": 128,
+  "dropout_rate": 0.4,
+  "heads": 8,
+  "model_type": "enformer",
+  "num_downsamples": 7,
+  "output_heads": {
+    "rbp": 166
+  },
+  "pos_dropout": 0.01,
+  "target_length": -1,
+  "torch_dtype": "float32",
+  "transformers_version": "4.16.2",
+  "use_checkpointing": false,
+  "num_label": 166,
+  "cell_line_dim": 32,
+  "esm_dim": 320,
+  "cross_freq": 2,
+  "exchange": true,
+  "cross_pos": false,
+  "esm_data": "cls",
+  "data_version": 166,
+  "res_out": true,
+  "zero": false,
+  "loss_type": "all",
+  "n_cell_line": 225,
+  "cross_depth": 3
+}
