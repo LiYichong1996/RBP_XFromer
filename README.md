@@ -63,6 +63,13 @@ cd RBP_XFormer
 pip install -r requirements.txt
 ```
 
+3. Download data and model parameters:
+The `data/` and `parameters/` folders are not included in the repository due to their large size. You need to download them from Zenodo:
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15628273.svg)](https://doi.org/10.5281/zenodo.15628273)
+
+Download the `rbp_xformer_data.zip` file from the above link and extract its contents to the project root directory. This will populate the required `data/` and `parameters/` folders.
+
 ## Project Structure
 
 ```
