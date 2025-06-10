@@ -2,7 +2,7 @@
 
 Predict RNA-protein Binding Sites on Full-length RNA Transcripts with Information of Multiple RBPs
 
-## Authors
+<!-- ## Authors
 
 Yichong Li<sup>1</sup>, Gufeng Yu<sup>1</sup>, Xiaoyong Pan<sup>2,3</sup> and Yang Yang<sup>1,4,*</sup>
 
@@ -11,7 +11,7 @@ Yichong Li<sup>1</sup>, Gufeng Yu<sup>1</sup>, Xiaoyong Pan<sup>2,3</sup> and Ya
 <sup>3</sup> Key Laboratory of System Control and Information Processing, Ministry of Education of China, Shanghai, 200240, China  
 <sup>4</sup> Key Laboratory of Shanghai Education Commission for Intelligent Interaction and Cognitive Engineering, Shanghai, 200240, China  
 
-*Corresponding Author: yangyang@cs.sjtu.edu.cn
+*Corresponding Author: yangyang@cs.sjtu.edu.cn -->
 
 ## Overview
 
