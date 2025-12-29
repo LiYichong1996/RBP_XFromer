@@ -344,44 +344,19 @@ class ResidualMLP(nn.Module):
         x = self.fc3(x)
         return x
     
+
 class OutStage3(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.linear1 = nn.Linear(config.dim*2, config.dim)
-        self.act_fn = nn.GELU()
-        self.out = nn.Linear(config.dim, config.num_label)
+        self.linear1 = nn.Linear(config.dim * 4, config.num_label)
         nn.init.zeros_(self.linear1.weight)
         nn.init.zeros_(self.linear1.bias)
-        nn.init.zeros_(self.out.weight)  # 初始化权重为0[2,6](@ref)
-        nn.init.zeros_(self.out.bias) 
-    
-    def forward(
-            self,
-            x
-    ):
+
+
+    def forward(self, x):
         x = self.linear1(x)
-        x = self.act_fn(x)
-        x = self.out(x)
-
         return x
-
-class DynamicGatedFusion3D(nn.Module):
-    def __init__(self, dim):
-        super().__init__()
-        # 门控权重生成网络（处理拼接后的特征）
-        self.gate_net = nn.Sequential(
-            nn.Linear(2*dim, dim),  # 沿通道维度拼接
-            nn.Dropout(0.1),        # 添加正则化
-            nn.Sigmoid()
-        )
-
-    def forward(self, input1, input2):
-        # 输入形状: [batch, length, dim]
-        concat_features = torch.cat([input1, input2], dim=-1)  # 沿通道维度拼接
-        gate = self.gate_net(concat_features)  # 生成门控权重 [batch, length, dim]
-        return gate * input1 + (1 - gate) * input2
-
-
+    
 
 class RBPXFormer(nn.Module):
     def __init__(self, config, enformer_param_dir=None):
@@ -416,7 +391,6 @@ class RBPXFormer(nn.Module):
         self.out_stage2 = CrossOutLayer(config)
         self.out_stage2_2 = CrossOutLayer_2(config)
         self.out_stage3 = OutStage3(config)
-        self.gate = DynamicGatedFusion3D(dim=166)
         
         
 
@@ -578,7 +552,7 @@ class RBPXFormer(nn.Module):
         if enformer1_out:
             return self.enformer(x)
 
-        logits0, x0 =  self.enformer(x, return_both=True)
+        logits0, x0, x_old =  self.enformer(x, return_both=True)
 
         x, y = self.cross_attn(
             x0, y, exchange=True
@@ -586,22 +560,18 @@ class RBPXFormer(nn.Module):
         x1 = x
         x = self.crop_final(x)
         x = self.final_pointwise(x)
-        logits1 = self.out_stage3(x)
+        x_old = F.dropout(x_old, p=0.2, training=self.training)
+        x_final = torch.cat([x_old, x], dim=-1)
+        logits1 = self.out_stage3(x_final)
 
         if self.config.res_out:
-            logits = self.gate(logits0, logits1)
-            return logits, self.out_stage1(y).squeeze(-1)
+            return  logits1, x1, y  
         elif self.config.zero:
             return x1, y
         else:
-            return self.out_stage3(x), self.out_stage1(y).squeeze(-1) #logits[:,:,self.config.aim_rbp_indices]
+            return self.out_stage3(x), self.out_stage1(y).squeeze(-1)
 
     def freeze_modules(self, module_names):
-        """
-        冻结指定名称的模块
-        Args:
-            module_names: 要冻结的模块名称列表
-        """
         for name, module in self.named_modules():
             if any(module_name in name for module_name in module_names):
                 for param in module.parameters():
@@ -610,11 +580,6 @@ class RBPXFormer(nn.Module):
                     module.eval()
       
     def freeze_and_disable_dropout_by_name(self, module_names):
-        """
-        冻结指定模块的参数并禁用其中的dropout等训练特定层
-        Args:
-            module_names: 要冻结的模块名称列表
-        """
         for name, module in self.named_modules():
             if any(module_name in name for module_name in module_names):
                 # 冻结参数
@@ -626,11 +591,6 @@ class RBPXFormer(nn.Module):
                 # print(f"Froze and disabled dropout for module: {name}")
     
     def unfreeze_module_by_name(self, module_names):
-        """
-        根据模块名字解冻模块并启用其中的dropout
-        Args:
-            module_names: List[str], 要解冻的模块名字列表
-        """
         for name, module in self.named_modules():
             if any(module_name in name for module_name in module_names):
                 for param in module.parameters():
@@ -639,7 +599,6 @@ class RBPXFormer(nn.Module):
                     module.train()
 
     def check_module_status(self):
-        """检查所有模块的训练状态和dropout状态"""
         status_dict = {}
         for name, module in self.named_modules():
             if len(list(module.parameters())) > 0:
@@ -652,7 +611,6 @@ class RBPXFormer(nn.Module):
         return status_dict
 
     def print_module_status(self):
-        """打印所有模块的状态"""
         status = self.check_module_status()
         for name, info in status.items():
             print(f"\nModule: {name}")
@@ -662,47 +620,29 @@ class RBPXFormer(nn.Module):
         
     def load_partial_state_dict(self, 
                               state_dict_path, 
-                              target_module=None,  # 如果是 None 则加载整个模型
+                              target_module=None, 
                               skip_size_mismatch=True,
                               verbose=True,
                               skip_layers=None,
                               only_load_layers=None):
-        """
-        加载部分模型参数，可以跳过形状不匹配的层
-        Args:
-            state_dict_path: 参数文件路径
-            target_module: 目标子模块，如 self.enformer
-            skip_size_mismatch: 是否跳过形状不匹配的参数
-            verbose: 是否打印详细信息
-            skip_layers: 要跳过的层名列表
-            only_load_layers: 只加载指定的层名列表
-        Returns:
-            dict: 加载结果的详细信息
-        """
-        # 加载 state dict
         state_dict = torch.load(state_dict_path, map_location=torch.device('cpu'))
         
-        # 处理多GPU训练保存的模型
         if any(k.startswith('module.') for k in state_dict.keys()):
             state_dict = {k[7:] if k.startswith('module.') else k: v 
                          for k, v in state_dict.items()}
         
-        # 确定目标模型
         target_model = target_module if target_module is not None else self
         model_state_dict = target_model.state_dict()
         
-        # 筛选可以加载的参数
         filtered_state_dict = {}
         skipped_layers = []
         shape_mismatch_layers = []
         
         for name, param in state_dict.items():
-            # 检查是否应该跳过这个层
             if skip_layers and any(skip in name for skip in skip_layers):
                 skipped_layers.append((name, "user_specified"))
                 continue
                 
-            # 检查是否只加载指定的层
             if only_load_layers and not any(load in name for load in only_load_layers):
                 skipped_layers.append((name, "not_in_only_load_layers"))
                 continue
@@ -719,7 +659,6 @@ class RBPXFormer(nn.Module):
                     
             filtered_state_dict[name] = param
         
-        # 加载参数
         target_model.load_state_dict(filtered_state_dict, strict=False)
         
         if verbose:
@@ -734,7 +673,6 @@ class RBPXFormer(nn.Module):
         }
 
     def _print_load_info(self, filtered_state_dict, skipped_layers, shape_mismatch_layers):
-        """打印加载信息"""
         print(f"\nLoaded {len(filtered_state_dict)} layers")
         print(f"Skipped {len(skipped_layers)} layers")
         

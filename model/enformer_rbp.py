@@ -344,9 +344,6 @@ class BertSelfOutput(nn.Module):
         hidden_states = self.dense2(hidden_states)
         hidden_states = self.dropout2(hidden_states)
         hidden_states += input_tensor
-        # hidden_states = self.dense(hidden_states)
-        # hidden_states = self.dropout(hidden_states)
-        # hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
 class CrossAttnLayer(nn.Module):
@@ -356,8 +353,6 @@ class CrossAttnLayer(nn.Module):
         self.crossattention = BertSelfAttention(
             config, is_cross_attention=True
         )
-
-        # self.intermediate_query = BertIntermediate(config)
         self.output_query = BertSelfOutput(config)
 
     def forward(
@@ -378,8 +373,6 @@ class CrossAttnLayer(nn.Module):
             output_attentions=output_attentions,
         )
         query_attention_output = cross_attention_outputs[0]
-        # intermediate_output = self.intermediate_query(query_attention_output)
-        # layer_output = self.output_query(intermediate_output, query_attention_output)
         layer_output = self.output_query(query_attention_output, hidden_states)
 
         return layer_output
@@ -456,12 +449,8 @@ class Enformer(PreTrainedModel):
 
         self.transformer = nn.Sequential(*transformer)
 
-        # target cropping
-
         self.target_length = config.target_length
         self.crop_final = TargetLengthCrop(config.target_length)
-
-        # final pointwise
 
         self.final_pointwise = nn.Sequential(
             Rearrange('b n d -> b d n'),
@@ -470,9 +459,6 @@ class Enformer(PreTrainedModel):
             nn.Dropout(config.dropout_rate / 8),
             GELU()
         )
-
-        # create trunk sequential module
-
         self._trunk = nn.Sequential(
             Rearrange('b n d -> b d n'),
             self.stem,
@@ -483,77 +469,11 @@ class Enformer(PreTrainedModel):
             self.final_pointwise
         )
 
-        # create final heads for human and mouse
-
-
-
         self.add_heads(**config.output_heads)
-
-        # use checkpointing on transformer trunk
-
         self.use_checkpointing = config.use_checkpointing
-
-        # if self.use_label_attention:
-        #     self.dim_value_label = 36
-        #     self.dim_key_label = 9
-        #     self.multi_label_layer = nn.Sequential(
-        #         nn.LayerNorm(config.dim),
-        #         Multi_Label_Attention(
-        #             self.dim,
-        #             heads = config.num_label,
-        #             dim_key = 8,
-        #             dim_value = 36,
-        #             dropout = config.attn_dropout,
-        #             pos_dropout = config.pos_dropout,
-        #             num_rel_pos_features = 36
-        #         ),
-        #         nn.Dropout(config.dropout_rate),
-        #         Residual(nn.Sequential(
-        #             nn.LayerNorm(36),
-        #             nn.Linear(36, 36 * 2),
-        #             nn.Dropout(config.dropout_rate),
-        #             nn.ReLU(),
-        #             nn.Linear(36 * 2, 36),
-        #             nn.Dropout(config.dropout_rate)
-        #         ))
-        #     )
-        #     self.cross_label_layer = nn.Sequential(
-        #         Residual(nn.Sequential(
-        #             nn.LayerNorm(36),
-        #             Label_Cross_Attention(
-        #                 36,
-        #                 dim_key = 8,
-        #                 dim_value = 36,
-        #                 dropout = config.attn_dropout,
-        #                 pos_dropout = config.pos_dropout,
-        #                 num_rel_pos_features = 36
-        #             ),
-        #             nn.Dropout(config.dropout_rate)
-        #         )),
-        #         Residual(nn.Sequential(
-        #             nn.LayerNorm(36),
-        #             nn.Linear(36, 36 * 2),
-        #             nn.Dropout(config.dropout_rate),
-        #             nn.ReLU(),
-        #             nn.Linear(36 * 2, 36),
-        #             nn.Dropout(config.dropout_rate)
-        #         ))
-        #     )
-        #     self.out_layer = nn.Linear(36, 1)
 
     def add_heads(self, **kwargs):
         self.output_heads = kwargs
-
-        # if self.use_label_attention:
-        #     self._heads = nn.ModuleDict(map_values(lambda features: nn.Sequential(
-        #     nn.Linear(self.dim * 2, features),
-        #     GELU(),
-        #     LabelAttention(features)
-        #     # nn.Softplus()
-        #     # nn.Sigmoid()
-        # ), kwargs))
-
-        # else:
         self._heads = nn.ModuleDict(map_values(lambda features: nn.Sequential(
             nn.Linear(self.dim * 2, features),
             
@@ -586,15 +506,10 @@ class Enformer(PreTrainedModel):
     def forward(
         self,
         x,
-        target = None,
-        return_corr_coef = False,
-        return_embeddings = False,
         return_only_embeddings = False,
-        head = None,
         target_length = None,
         return_only_embeddings_before_final_pointwise = False,
-        return_both = False,
-        final_res=False
+        return_both = False
     ):
         if isinstance(x, list):
             x = str_to_one_hot(x)
@@ -622,42 +537,17 @@ class Enformer(PreTrainedModel):
         x0 = x
         x = trunk_fn[5](x)
         x = trunk_fn[6](x)
-        # x = trunk_fn(x)
 
         if no_batch:
             x = rearrange(x, '() ... -> ...')
 
         if return_only_embeddings:
             return x
-        
-        
-        # if self.use_label_attention:
-        #     out = self.multi_label_layer(x)
-        #     # out = self.cross_label_layer(out)
-        #     out = self.out_layer(out)
-        #     out = rearrange(out, "b n h d -> b n (h d)")
-        #     out = {
-        #         'rbp': out
-        #     }
-        # else:
+
         out = map_values(lambda fn: fn(x), self._heads)
 
-        # if exists(head):
-        #     assert head in self._heads, f'head {head} not found'
-        #     out = out[head]
-
-        # if exists(target):
-        #     assert exists(head), 'head must be passed in if one were to calculate loss directly with targets'
-
-        #     if return_corr_coef:
-        #         return pearson_corr_coef(out, target)
-
-        #     return poisson_loss(out, target)
-
-        # if return_embeddings:
-        #     return out, x
         if return_both:
-            return out['rbp'], x0
+            return out['rbp'], x0, x
 
         return out
     

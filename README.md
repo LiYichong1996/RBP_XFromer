@@ -6,7 +6,7 @@ Predict RNA-protein Binding Sites on Full-length RNA Transcripts with Informatio
 
 Yichong Li<sup>1</sup>, Gufeng Yu<sup>1</sup>, Xiaoyong Pan<sup>2,3</sup> and Yang Yang<sup>1,4,*</sup>
 
-<sup>1</sup> Department of Computer Science and Engineering, Shanghai Jiao Tong University, Shanghai 200240, China  
+<sup>1</sup> AGI Institute, School of Computer Science, Shanghai Jiao Tong University, Shanghai 200240, China  
 <sup>2</sup> Institute of Image Processing and Pattern Recognition, Shanghai Jiao Tong University, Shanghai 200240, China  
 <sup>3</sup> Key Laboratory of System Control and Information Processing, Ministry of Education of China, Shanghai, 200240, China  
 <sup>4</sup> Key Laboratory of Shanghai Education Commission for Intelligent Interaction and Cognitive Engineering, Shanghai, 200240, China  
@@ -142,8 +142,8 @@ The model generates predictions for each input RNA sequence and saves them as pi
 Example output structure:
 ```
 results/
-├── sequence1.pkl  # Tensor of shape [fragments1, 166]
-├── sequence2.pkl  # Tensor of shape [fragments2, 166]
+├── sequence1.pkl  # Tensor of shape [fragments1, 189]
+├── sequence2.pkl  # Tensor of shape [fragments2, 189]
 └── ...
 ```
 
